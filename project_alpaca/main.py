@@ -2,6 +2,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
+import numpy as np
 from datetime import datetime, timedelta
 
 # Use python -m streamlit run main.py to run the app
