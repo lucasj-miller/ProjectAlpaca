@@ -4,6 +4,8 @@ import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
+# Use python -m streamlit run main.py to run the app
+
 # 1. PAGE SETUP
 st.set_page_config(page_title="Alpaca", layout="wide", page_icon="📈")
 
@@ -34,7 +36,7 @@ with col_input:
     with st.container(border=True):
         st.subheader("Analyze Security")
         ticker = st.text_input("Ticker Symbol", placeholder="AAPL, TSLA...").upper()
-        shares = st.number_input("Number of Shares", min_value=1, value=100)
+        shares = st.number_input("Number of Shares", min_value=0.01, value=10.0, step=0.1)
         
         default_start = datetime.now() - timedelta(days=365)
         default_end = datetime.now()
@@ -81,6 +83,27 @@ with col_result:
                     m1.metric("Current Value", f"${(current_price * shares):,.2f}")
                     m2.metric("Net Profit/Loss", f"${profit:,.2f}", delta=f"{pct_change:.2f}%")
                     m3.metric("Close Price", f"${current_price:.2f}")
+
+                    st.markdown("###") # Spacer
+
+                    # Risk Analysis
+                    st.markdown("##### Risk Profile")
+                    r1, r2, r3 = st.columns(3)
+                    
+                    # Interpret Beta
+                    beta_color = "normal"
+                    if beta > 1.5: beta_msg = "High Volatility"
+                    elif beta < 0.8: beta_msg = "Low Volatility"
+                    else: beta_msg = "Market Correlated"
+
+                    r1.metric("Beta", f"{beta:.2f}", delta=beta_msg, delta_color="off")
+                    r2.metric("Annual Volatility", f"{volatility:.1f}%")
+                    
+                    # Sharpe Ratio (Rough estimate assuming 4% risk free rate)
+                    risk_free_rate = 0.04
+                    excess_return = (combined_data['Stock'].mean() * 252) - risk_free_rate
+                    sharpe = excess_return / (volatility / 100)
+                    r3.metric("Sharpe Ratio", f"{sharpe:.2f}")
 
                     # Chart
                     fig = go.Figure()
