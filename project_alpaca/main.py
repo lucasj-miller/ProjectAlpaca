@@ -58,6 +58,8 @@ with col_result:
 
                 # Download Data
                 data = yf.download(ticker, start=start_d, end=end_d, progress=False)
+                # Download Market Data (S&P 500) for Beta Calculation
+                mdata = yf.download("^GSPC", start=start_d, end=end_d, progress=False)
                 
                 if data.empty:
                     st.error(f"No data found for {ticker}.")
@@ -75,8 +77,8 @@ with col_result:
                     profit = (current_price - start_price) * shares
                     pct_change = ((current_price - start_price) / start_price) * 100
                     # Calculate daily % returns
-                    stock_returns = stock_data['Close'].pct_change().dropna()
-                    market_returns = market_data['Close'].pct_change().dropna()
+                    stock_returns = data['Close'].pct_change().dropna()
+                    market_returns = mdata['Close'].pct_change().dropna()
                     
                     # Align data to ensure we compare the exact same dates
                     # (This handles if the stock missed a trading day)
