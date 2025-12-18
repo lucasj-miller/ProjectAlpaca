@@ -62,7 +62,7 @@ with col_result:
                 if data.empty:
                     st.error(f"No data found for {ticker}.")
                 else:
-                    # --- CRITICAL FIX: Flatten the data ---
+                    # --- Flatten the data ---
                     # yfinance sometimes returns multi-level columns. We simplify them here.
                     if isinstance(data.columns, pd.MultiIndex):
                         data.columns = data.columns.droplevel(1)
@@ -74,6 +74,23 @@ with col_result:
                     # Calculate
                     profit = (current_price - start_price) * shares
                     pct_change = ((current_price - start_price) / start_price) * 100
+                    # Calculate daily % returns
+                    stock_returns = stock_data['Close'].pct_change().dropna()
+                    market_returns = market_data['Close'].pct_change().dropna()
+                    
+                    # Align data to ensure we compare the exact same dates
+                    # (This handles if the stock missed a trading day)
+                    combined_data = pd.concat([stock_returns, market_returns], axis=1).dropna()
+                    combined_data.columns = ['Stock', 'Market']
+                    
+                    # Beta Formula: Covariance / Variance
+                    covariance = combined_data['Stock'].cov(combined_data['Market'])
+                    market_variance = combined_data['Market'].var()
+                    beta = covariance / market_variance
+                    
+                    # Volatility (Annualized Standard Deviation)
+                    # We multiply by sqrt(252) because there are ~252 trading days in a year
+                    volatility = combined_data['Stock'].std() * np.sqrt(252) * 100
                     
                     # Display Header
                     st.subheader(f"Performance History: {ticker}")
