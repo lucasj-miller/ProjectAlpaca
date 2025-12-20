@@ -119,9 +119,21 @@ with col_result:
 
                     with st.expander("📚 What do these metrics mean?"):
                         st.markdown("""
-                        **Beta:** >1.5 is Aggressive, <0.8 is Defensive.
-                        **Volatility:** Annualized standard deviation (Risk).
-                        **Sharpe:** Return per unit of risk (>1.0 is good).
+                        **Beta (β)**
+                        * **What it is:** Measures how much a stock moves compared to the S&P 500.
+                        * **The Math:** `Covariance(Stock, Market) / Variance(Market)`
+                        * **Interpretation:** * `1.0`: Moves exactly with the market.
+                            * `>1.5`: Very volatile (High Risk/High Reward).
+                            * `<0.8`: Defensive stock (Less volatile than the market).
+
+                        **Annual Volatility (σ)**
+                        * **What it is:** The annualized standard deviation of daily returns. It shows how "bumpy" the ride is.
+                        * **The Math:** `StdDev(Daily Returns) * √252` (252 trading days/year).
+                        
+                        **Sharpe Ratio**
+                        * **What it is:** Measures "return per unit of risk." Is the stock worth the stress?
+                        * **The Math:** `(Stock Return - Risk Free Rate) / Volatility`
+                        * **Interpretation:** A ratio `> 1.0` is generally considered "good" (you are getting paid well for the risk you take).
                         """)
 
                     # Chart
