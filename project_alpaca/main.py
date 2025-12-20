@@ -1,18 +1,15 @@
 import streamlit as st
-import yfinance as yf
-import pandas as pd
 import plotly.graph_objects as go
-import numpy as np
 from datetime import datetime, timedelta
+from backend import Asset  # <--- Import your new class
 
-# Use python -m streamlit run main.py to run the app
+# 1. PAGE CONFIG
+st.set_page_config(page_title="Alpaca Finance", layout="wide", page_icon="📈")
 
-# 1. PAGE SETUP
-st.set_page_config(page_title="Alpaca", layout="wide", page_icon="📈")
-
-# 2. CUSTOM CSS (To force the visual style)
+# 2. CSS STYLING
 st.markdown("""
     <style>
+    .stApp { background: linear-gradient(to bottom right, #0e1117, #161b22, #0e1117); }
     .block-container { padding-top: 2rem; }
     h1 { font-size: 3rem; font-weight: 700; margin-bottom: 0rem; }
     .subtitle { font-size: 1.2rem; color: #a0a0a0; margin-bottom: 2rem; }
@@ -21,18 +18,28 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 3. HEADER
-col_logo, col_nav = st.columns([1, 4])
-with col_logo:
-    st.markdown("### 📈 ALPACA") 
+col_logo, col_title = st.columns([0.8, 10]) 
 
-st.title("Market Intelligence")
-st.markdown('<p class="subtitle">Advanced volatility analysis and AI-driven insights for the modern investor.<br>Analyze securities, track portfolios, and make data-driven decisions.</p>', unsafe_allow_html=True)
+with col_logo:
+    # Use HTML to make the emoji big like a logo
+    st.markdown("<div style='font-size: 3.5rem; line-height: 1.2;'>📈</div>", unsafe_allow_html=True)
+
+with col_title:
+    st.markdown(
+        """
+        <h1 style='margin-bottom: 0px; margin-top: 0px; padding-top: 10px; font-size: 3rem;'>
+            Alpaca Finance
+        </h1>
+        """, 
+        unsafe_allow_html=True
+    )
+
+st.markdown('<p class="subtitle">A unified interface for quantitative risk metrics and fundamental news flow.<br>Accelerate due diligence by combining technical indicators with real-time market sentiment.</p>', unsafe_allow_html=True)
 st.markdown("---")
 
 # 4. MAIN INTERFACE
 col_input, col_result = st.columns([1, 2])
 
-# --- LEFT CARD: INPUTS ---
 with col_input:
     with st.container(border=True):
         st.subheader("Analyze Security")
@@ -46,123 +53,105 @@ with col_input:
         st.markdown("###")
         run_btn = st.button("Run Analysis", type="primary", use_container_width=True)
 
-# --- RIGHT CARD: RESULTS ---
+# 5. EXECUTION LOGIC
 with col_result:
     if run_btn and ticker:
         try:
             with st.spinner(f"Analyzing {ticker}..."):
-                # Handle dates
-                if isinstance(date_range, tuple) and len(date_range) == 2:
-                    start_d, end_d = date_range
-                else:
-                    start_d, end_d = default_start, default_end
-
-                # Download Data
-                data = yf.download(ticker, start=start_d, end=end_d, progress=False)
-                # Download Market Data (S&P 500) for Beta Calculation
-                mdata = yf.download("^GSPC", start=start_d, end=end_d, progress=False)
+                # --- INITIALIZE BACKEND CLASS ---
+                asset = Asset(ticker)
                 
-                if data.empty:
-                    st.error(f"No data found for {ticker}.")
+                # A. Handle Dates
+                if isinstance(date_range, tuple) and len(date_range) == 2:
+                    start, end = date_range
                 else:
-                    # --- Flatten the data ---
-                    # yfinance sometimes returns multi-level columns. We simplify them here.
-                    if isinstance(data.columns, pd.MultiIndex):
-                        data.columns = data.columns.droplevel(1)
+                    start, end = default_start, default_end
+                
+                # B. Get Data
+                stock_data = asset.get_data(start, end)
+                
+                if stock_data.empty:
+                    st.error(f"No data found for {ticker}")
+                else:
+                    metrics = asset.calculate_risk_metrics()
                     
-                    # Get Clean Values
-                    current_price = data['Close'].iloc[-1]
-                    start_price = data['Close'].iloc[0]
+                    # --- DISPLAY NEWS (In Left Column) ---
+                    with col_input:
+                        st.markdown("---")
+                        st.subheader("📢 Recent News")
+                        news_items = asset.get_news()
+                        if news_items:
+                            for n in news_items:
+                                st.markdown(f"**[{n['title']}]({n['link']})**")
+                                st.caption(f"Source: {n['publisher']}")
+                                st.markdown("---")
+                        else:
+                            st.write("No news found.")
+
+                    # --- DISPLAY METRICS ---
+                    st.subheader(f"Performance: {ticker}")
                     
-                    # Calculate
+                    # Row 1: Money
+                    current_price = stock_data['Close'].iloc[-1]
+                    start_price = stock_data['Close'].iloc[0]
                     profit = (current_price - start_price) * shares
                     pct_change = ((current_price - start_price) / start_price) * 100
-                    # Calculate daily % returns
-                    stock_returns = data['Close'].pct_change().dropna()
-                    market_returns = mdata['Close'].pct_change().dropna()
-                    
-                    # Align data to ensure we compare the exact same dates
-                    # (This handles if the stock missed a trading day)
-                    combined_data = pd.concat([stock_returns, market_returns], axis=1).dropna()
-                    combined_data.columns = ['Stock', 'Market']
-                    
-                    # Beta Formula: Covariance / Variance
-                    covariance = combined_data['Stock'].cov(combined_data['Market'])
-                    market_variance = combined_data['Market'].var()
-                    beta = covariance / market_variance
-                    
-                    # Volatility (Annualized Standard Deviation)
-                    # We multiply by sqrt(252) because there are ~252 trading days in a year
-                    volatility = combined_data['Stock'].std() * np.sqrt(252) * 100
-                    
-                    # Display Header
-                    st.subheader(f"Performance History: {ticker}")
-                    
-                    # Metrics
+
                     m1, m2, m3 = st.columns(3)
                     m1.metric("Current Value", f"${(current_price * shares):,.2f}")
                     m2.metric("Net Profit/Loss", f"${profit:,.2f}", delta=f"{pct_change:.2f}%")
-                    m3.metric("Close Price", f"${current_price:.2f}")
+                    m3.metric("Share Price", f"${current_price:.2f}")
 
-                    st.markdown("###") # Spacer
-
-                    # Risk Analysis
+                    # Row 2: Risk Profile
                     st.markdown("##### Risk Profile")
                     r1, r2, r3 = st.columns(3)
-                    
-                    # Interpret Beta
-                    beta_color = "normal"
-                    if beta > 1.5: beta_msg = "High Volatility"
-                    elif beta < 0.8: beta_msg = "Low Volatility"
-                    else: beta_msg = "Market Correlated"
 
-                    r1.metric("Beta", f"{beta:.2f}", delta=beta_msg, delta_color="off")
-                    r2.metric("Annual Volatility", f"{volatility:.1f}%")
-                    
-                    # Sharpe Ratio (Rough estimate assuming 4% risk free rate)
-                    risk_free_rate = 0.04
-                    excess_return = (combined_data['Stock'].mean() * 252) - risk_free_rate
-                    sharpe = excess_return / (volatility / 100)
-                    r3.metric("Sharpe Ratio", f"{sharpe:.2f}")
+                    if metrics:
+                        # Color Logic
+                        b_val = metrics['beta']
+                        if b_val > 1.5: b_col, b_msg = "inverse", "High Volatility"
+                        elif b_val < 0.8: b_col, b_msg = "normal", "Low Volatility"
+                        else: b_col, b_msg = "off", "Market Correlated"
+
+                        r1.metric("Beta", f"{b_val:.2f}", delta=b_msg, delta_color=b_col)
+                        r2.metric("Annual Volatility", f"{metrics['volatility']:.1f}%")
+                        r3.metric("Sharpe Ratio", f"{metrics['sharpe']:.2f}")
+
+                    with st.expander("📚 What do these metrics mean?"):
+                        st.markdown("""
+                        **Beta:** >1.5 is Aggressive, <0.8 is Defensive.
+                        **Volatility:** Annualized standard deviation (Risk).
+                        **Sharpe:** Return per unit of risk (>1.0 is good).
+                        """)
 
                     # Chart
                     fig = go.Figure()
                     fig.add_trace(go.Scatter(
-                        x=data.index, 
-                        y=data['Close'], 
-                        mode='lines', 
-                        name=ticker,
+                        x=stock_data.index, y=stock_data['Close'], 
+                        mode='lines', name=ticker,
                         line=dict(color='#00D4FF', width=2),
-                        fill='tozeroy',
-                        fillcolor='rgba(0, 212, 255, 0.1)'
+                        fill='tozeroy', fillcolor='rgba(0, 212, 255, 0.1)'
                     ))
-                    
                     fig.update_layout(
-                        height=400, 
-                        paper_bgcolor='rgba(0,0,0,0)',
-                        plot_bgcolor='rgba(0,0,0,0)',
-                        margin=dict(t=20, l=0, r=0, b=0),
-                        font=dict(color='white'),
-                        xaxis=dict(showgrid=False, title=None),
-                        yaxis=dict(showgrid=True, gridcolor='#333', title=None)
+                        height=350, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                        margin=dict(t=20, l=0, r=0, b=0), font=dict(color='white'),
+                        xaxis=dict(showgrid=False, title="Date"),
+                        yaxis=dict(showgrid=True, gridcolor='#333', title="Price (USD)")
                     )
-                    
                     st.plotly_chart(fig, use_container_width=True)
-
         except Exception as e:
-            st.error(f"An error occurred: {e}")
-
+            st.error(f"Error: {e}")
     else:
-        # Empty State
+        # Empty State (Waiting for Input)
         with st.container(border=True):
             st.markdown(
                 """
                 <div style="height: 400px; display: flex; align-items: center; justify-content: center; color: #666;">
                     <div style="text-align: center;">
-                        <h1>!</h1>
-                        <p>Enter a ticker symbol to view performance data</p>
+                        <div style="font-size: 4rem;">📊</div>
+                        <p>Enter a ticker (e.g. AAPL) to view the<br>Equity Research Dashboard</p>
                     </div>
                 </div>
                 """, 
                 unsafe_allow_html=True
-            )
+            )        
