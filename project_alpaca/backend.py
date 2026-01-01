@@ -79,9 +79,9 @@ class Asset:
             tick_obj = yf.Ticker(self.ticker)
             info = tick_obj.info
             return{
-                "market cap": info.get('marketCap', None)
-                "pe_ratio": info.get('trailingPE', None)
-                "eps": info.get('trailingEps', None)
+                "market cap": info.get('marketCap', None),
+                "pe_ratio": info.get('trailingPE', None),
+                "eps": info.get('trailingEps', None),
                 "dividend_yield": info.get('dividendYield', None)
             }
         except Exception as e:
