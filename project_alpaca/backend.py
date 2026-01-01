@@ -72,3 +72,18 @@ class Asset:
                 clean_news.append(article)
         
         return clean_news
+
+    def get_fundamentals(self):
+        # Fetches basic fundamental data (e.g. P/E)
+        try:
+            tick_obj = yf.Ticker(self.ticker)
+            info = tick_obj.info
+            return{
+                "market cap": info.get('marketCap', None)
+                "pe_ratio": info.get('trailingPE', None)
+                "eps": info.get('trailingEps', None)
+                "dividend_yield": info.get('dividendYield', None)
+            }
+        except Exception as e:
+            print(f"Error fetching fundamental data: {e}")
+            return None

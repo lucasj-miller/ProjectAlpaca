@@ -102,7 +102,33 @@ with col_result:
                     m2.metric("Net Profit/Loss", f"${profit:,.2f}", delta=f"{pct_change:.2f}%")
                     m3.metric("Share Price", f"${current_price:.2f}")
 
-                    # Row 2: Risk Profile
+                    # Row 2: Fundamentals
+                    st.markdown("##### Fundamental Data")
+                    f1, f2, f3, f4 = st.columns(4)
+                    fund_data = asset.get_fundamentals()
+                    if fund_data:
+                        # Market Cap
+                        mc = fund_data['marketCap']
+                        if mc:
+                            if mc > 1e12: mc_str = f"{mc/1e12:.2f}T"
+                            elif mc > 1e9: mc_str = f"{mc/1e9:.2f}B"
+                            else: mc_str = f"{mc/1e6:.2f}M"
+                        else:
+                            mc_str = "-"
+                        f1.metric("Market Cap", mc_str)
+                        # P/E Ratio
+                        pe = fund_data['pe_ratio']
+                        f2.metric("P/E Ratio", f"{pe:.2f}") if pe else f2.metric("P/E Ratio", "-")
+                        # EPS
+                        eps = fund_data['eps']
+                        f3.metric("EPS", f"${eps:.2f}") if eps else f3.metric("EPS", "-")
+                        # Dividend Yield
+                        div_yield = fund_data['dividendYield']
+                        f4.metric("Dividend Yield", f"{div_yield:.2f}%") if div_yield else f4.metric("Dividend Yield", "-")
+
+                    st.markdown("###")
+
+                    # Row 3: Risk Profile
                     st.markdown("##### Risk Profile")
                     r1, r2, r3 = st.columns(3)
 
