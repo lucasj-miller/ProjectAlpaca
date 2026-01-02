@@ -74,16 +74,26 @@ class Asset:
         return clean_news
 
     def get_fundamentals(self):
-        # Fetches basic fundamental data (e.g. P/E)
+        """Fetches fundamentals with a fallback mechanism"""
         try:
             tick_obj = yf.Ticker(self.ticker)
+
+            # 1. Try Fast Info (Fastest)
+            market_cap = tick_obj.fast_info.get('market_cap')
+
+            # 2. Fallback: If Fast Info failed, try the standard .info (Slower but detailed)
+            if market_cap is None:
+                market_cap = tick_obj.info.get('marketCap')
+
+            # Get other metrics from .info
             info = tick_obj.info
-            return{
-                "market cap": info.get('marketCap', None),
+
+            return {
+                "market_cap": market_cap,
                 "pe_ratio": info.get('trailingPE', None),
                 "eps": info.get('trailingEps', None),
                 "dividend_yield": info.get('dividendYield', None)
             }
         except Exception as e:
-            print(f"Error fetching fundamental data: {e}")
+            print(f"Error fetching fundamentals: {e}")
             return None
