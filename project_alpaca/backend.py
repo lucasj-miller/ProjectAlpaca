@@ -1,6 +1,7 @@
 import yfinance as yf
 import pandas as pd
 import numpy as np
+from datetime import timedelta
 
 class Asset:
     def __init__(self, ticker):
@@ -9,16 +10,29 @@ class Asset:
         self.market_data = pd.DataFrame()
 
     def get_data(self, start_date, end_date):
-        """Fetches Stock and Market (S&P500) data"""
-        self.stock_data = yf.download(self.ticker, start=start_date, end=end_date, progress=False)
+        """Fetches Stock data with a buffer for Moving Averages"""
+
+        # 1. Create a "Buffer" (Fetch 1 extra year of data)
+        # We need this history to calculate the 200-day SMA for the very first requested day.
+        buffer_start = start_date - timedelta(days=365)
+
+        self.stock_data = yf.download(self.ticker, start=buffer_start, end=end_date, progress=False)
         self.market_data = yf.download("^GSPC", start=start_date, end=end_date, progress=False)
-        
-        # Clean MultiIndex (Standard yfinance fix)
+
+        # Clean MultiIndex
         if isinstance(self.stock_data.columns, pd.MultiIndex):
             self.stock_data.columns = self.stock_data.columns.droplevel(1)
         if isinstance(self.market_data.columns, pd.MultiIndex):
             self.market_data.columns = self.market_data.columns.droplevel(1)
-            
+
+        # 2. Calculate Moving Averages on the FULL dataset (including buffer)
+        self.stock_data['SMA_50'] = self.stock_data['Close'].rolling(window=50).mean()
+        self.stock_data['SMA_200'] = self.stock_data['Close'].rolling(window=200).mean()
+
+        # 3. Slice the data back to what the user actually asked for
+        # This cuts off the 2024 buffer data so the graph doesn't look zoomed out
+        self.stock_data = self.stock_data.loc[start_date:]
+
         return self.stock_data
 
     def calculate_risk_metrics(self):

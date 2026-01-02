@@ -66,12 +66,23 @@ col_title = st.columns([0.8, 10])
 st.markdown(
         """
         <h1 style='margin-bottom: 0px; margin-top: 0px; padding-top: 10px; font-size: 3rem;'>
-            Alpaca Finance
+            🦙 Alpaca Finance
         </h1>
         """, 
         unsafe_allow_html=True)
 
-st.markdown('<p class="subtitle">A unified interface for quantitative risk metrics and fundamental news flow.<br>Accelerate due diligence by combining technical indicators with real-time market sentiment.</p>', unsafe_allow_html=True)
+st.markdown(
+    """
+    <div style='background-color: #111; padding: 15px; border-radius: 5px; border-left: 5px solid #FF9900; margin-bottom: 20px;'>
+        <p style='font-size: 1.0rem; color: #ddd; margin: 0; line-height: 1.5;'>
+            <b>Equity Research Dashboard:</b> An institutional-grade analytics tool designed for rapid security assessment. 
+            This platform integrates real-time <b>Fundamental Valuation</b> (P/E, Market Cap), <b>Quantitative Risk Scoring</b> (Beta, Sharpe Ratio), 
+            and <b>Technical Trend Analysis</b> (50/200-Day SMA) to provide a comprehensive view of asset performance.
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 st.markdown("---")
 
 # 4. MAIN INTERFACE
@@ -115,7 +126,7 @@ with col_result:
                     # --- DISPLAY NEWS (In Left Column) ---
                     with col_input:
                         st.markdown("---")
-                        st.subheader("📢 Recent News")
+                        st.subheader("Recent News")
                         news_items = asset.get_news()
                         if news_items:
                             for n in news_items:
@@ -188,8 +199,6 @@ with col_result:
                             div_str, div_msg, div_col = "-", None, "off"
                         f4.metric("Dividend Yield", div_str, delta=div_msg, delta_color=div_col)
 
-                    st.markdown("###")
-
                     # Row 3: Risk Profile
                     st.markdown("##### Risk Profile")
                     r1, r2, r3 = st.columns(3)
@@ -221,7 +230,7 @@ with col_result:
                             s_col, s_msg = "off", "Average"
                         r3.metric("Sharpe Ratio", f"{s_val:.2f}", delta=s_msg, delta_color=s_col)
 
-                    with st.expander("📚 What do these metrics mean?"):
+                    with st.expander("What do these metrics mean?"):
                         st.markdown("""
                         ### 🏢 Fundamental Metrics (The Business)
                         
@@ -261,10 +270,6 @@ with col_result:
                     # --- ADVANCED CHARTING ---
                     st.markdown("##### Price Action")
 
-                    # 1. Calculate Moving Averages (The Math) (WILL ADD LATER)
-                    stock_data['SMA_50'] = stock_data['Close'].rolling(window=50).mean()
-                    stock_data['SMA_200'] = stock_data['Close'].rolling(window=200).mean()
-
                     # 2. Build the Plot (The Visuals)
                     fig = go.Figure()
 
@@ -276,18 +281,18 @@ with col_result:
                     ))
 
                     # B. 50-Day SMA (Short Term Trend) - Orange
-                    # fig.add_trace(go.Scatter(
-                        # x=stock_data.index, y=stock_data['SMA_50'],
-                        # mode='lines', name='50-Day SMA',
-                        # line=dict(color='#FF9900', width=1, dash='dot')
-                    # ))
+                    fig.add_trace(go.Scatter(
+                        x=stock_data.index, y=stock_data['SMA_50'],
+                        mode='lines', name='50-Day SMA',
+                        line=dict(color='#FF9900', width=1, dash='dot')
+                    ))
 
                     # C. 200-Day SMA (Long Term Trend) - Purple
-                    # fig.add_trace(go.Scatter(
-                        # x=stock_data.index, y=stock_data['SMA_200'],
-                        # mode='lines', name='200-Day SMA',
-                        # line=dict(color='#d62728', width=1)
-                    # ))
+                    fig.add_trace(go.Scatter(
+                        x=stock_data.index, y=stock_data['SMA_200'],
+                        mode='lines', name='200-Day SMA',
+                        line=dict(color='#d62728', width=1)
+                    ))
 
                     # 3. Bloomberg Chart Styling
                     fig.update_layout(
@@ -300,8 +305,23 @@ with col_result:
                         yaxis=dict(showgrid=True, gridcolor='#1a1a1a', gridwidth=1, side='right'), # Price on Right
                         legend=dict(x=0, y=1, bgcolor='rgba(0,0,0,0)')
                     )
-
                     st.plotly_chart(fig, use_container_width=True)
+                    with st.expander("How do you read this chart?"):
+                        st.markdown("""
+                        ### Moving Averages (SMA)
+                        The lines overlaying the price chart help identify the trend direction by smoothing out daily noise.
+                        
+                        * **50-Day SMA (Orange):** The short-term trend. Traders often use this as a dynamic support level in an uptrend.
+                        * **200-Day SMA (Red):** The long-term trend. If the price is above this line, the stock is generally considered to be in a "Bull Market."
+                        
+                        ---
+                        
+                        ### Trading Signals
+                        When these two lines cross, it signals a major shift in momentum:
+                        
+                        * **Golden Cross:** When the **50-Day** crosses *above* the **200-Day**. This is a **Bullish** (Buy) signal indicating gaining momentum.
+                        * **Death Cross:** When the **50-Day** crosses *below* the **200-Day**. This is a **Bearish** (Sell) signal indicating a potential crash.
+                        """)
         except Exception as e:
             st.error(f"Error: {e}")
     else:
@@ -317,4 +337,14 @@ with col_result:
                 </div>
                 """, 
                 unsafe_allow_html=True
-            )        
+            )
+st.markdown("---")
+st.markdown(
+    """
+    <div style='text-align: center; color: #666; font-family: "Roboto Mono", monospace; font-size: 0.8rem;'>
+        Alpaca Finance v0.1.0 (Alpha Build) | Data provided by Yahoo Finance<br>
+        Not financial advice. For educational purposes only.
+    </div>
+    """,
+    unsafe_allow_html=True
+)
