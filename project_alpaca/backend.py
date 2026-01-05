@@ -117,35 +117,46 @@ class Asset:
             return {"beta": None, "volatility": None, "sharpe": None}
 
     def get_fundamentals(self):
-        """Fetches fundamentals, prioritizing fast_info (API) over info (Scraping)"""
-        data = {
-            "market_cap": None,
-            "pe_ratio": None,
-            "eps": None,
-            "dividend_yield": None
-        }
+        # Calculates metrics from raw data (fast_info, financials)
         try:
-            tick_obj = yf.Ticker(self.ticker)
-            # 1. Try Fast Info (The "API" method - More reliable on Cloud)
-            # This almost always works even if scraping is blocked
+            ticker_obj = yf.Ticker(self.ticker)
+            # Get Price and Market Cap
             try:
-                data["market_cap"] = tick_obj.fast_info.get('market_cap')
+                price = ticker_obj.info['currentPrice']
+                market_cap = ticker_obj.info['marketCap']
             except:
-                pass # Keep going if this fails
-            # 2. Try Standard Info (The "Scraping" method - Often blocked on Cloud)
-            # We wrap this in a separate try/except so it doesn't kill the Market Cap if it fails
+                price = None
+                market_cap = None
+            # Calculate Dividend Yield
+            div_yield = None
             try:
-                info = tick_obj.info
-                # Fill in gaps if Fast Info missed them
-                if data["market_cap"] is None:
-                    data["market_cap"] = info.get('marketCap')
-
-                data["pe_ratio"] = info.get('trailingPE')
-                data["eps"] = info.get('trailingEps')
-                data["dividend_yield"] = info.get('dividendYield')
+                divs = ticker_obj.dividends
+                oneyear = pd.Timestamp.now().tz_localize(divs.index.dtype.tz) - pd.Timedelta(days=365)
+                recent_divs = divs[divs.index >= oneyear]
+                if not recent_divs.empty and price:
+                    total_div = recent_divs.sum()
+                    div_yield = total_div / price
             except:
-                # If scraping fails, we just leave P/E as None but return whatever Market Cap we got
-                print("Detailed info scraping failed")
-            return data
+                div_yield = None
+            # Calculate P/E Ratio
+            pe_ratio = None
+            try:
+                stmt = ticker_obj.income_stmt
+                if not stmt.empty:
+                    eps = None
+                    if 'Diluted EPS' in stmt.index:
+                        eps = stmt.loc['Diluted EPS'].iloc[0]
+                    elif 'Basic EPS' in stmt.index:
+                        eps = stmt.loc['Basic EPS'].iloc[0]
+                    if eps and price:
+                        pe_ratio = price / eps
+            except:
+                pe_ratio = None
+            return {
+                "market_cap": market_cap,
+                "pe_ratio": pe_ratio,
+                "dividend_yield": div_yield,
+                "eps": eps
+            }
         except Exception as e:
             return {"error": str(e)}

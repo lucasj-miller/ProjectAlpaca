@@ -168,48 +168,36 @@ with col_result:
                     fund_data = asset.get_fundamentals()
                     if fund_data:
                         # 1. Market Cap
-                        mktcap = fund_data['market_cap']
-                        mktcap_str = "-"
-                        if isinstance(mktcap, (int, float)):
-                            if mktcap > 1e12:
-                                mktcap_str = f"${mktcap / 1e12:.2f}T"
-                            elif mktcap > 1e9:
-                                mktcap_str = f"${mktcap / 1e9:.2f}B"
+                        mktcap = fund_data.get('market_cap')
+                        if mktcap:
+                            if mktcap> 1e12:
+                                f1.metric("Market Cap", f"{mktcap/1e12:.2f}T")
+                            elif mktcap> 1e9:
+                                f1.metric("Market Cap", f"{mktcap/1e9:.2f}B")
                             else:
-                                mktcap_str = f"${mktcap / 1e6:.2f}M"
-                        f1.metric("Market Cap", mktcap_str)
+                                f1.metric("Market Cap", f"{mktcap/1e6:.2f}M")
+                        else:
+                            f1.metric("Market Cap", "-")
                         # 2. P/E Ratio
-                        pe = fund_data['pe_ratio']
+                        pe = fund_data.get('pe_ratio')
                         if pe:
-                            pe_str = f"{pe:.2f}"
-                            if pe > 30:
-                                pe_msg, pe_col = "Premium", "inverse" # Red
-                            elif pe < 15:
-                                pe_msg, pe_col = "Value", "normal" # Green
-                            else:
-                                pe_msg, pe_col = "Fair", "off"
+                            f2.metric("P/E Ratio", f"{pe:.2f}")
                         else:
-                            pe_str, pe_msg, pe_col = "-", None, "off"
-                        f2.metric("P/E Ratio", pe_str, delta=pe_msg, delta_color=pe_col)
+                            f2.metric("P/E Ratio", "-")
                         # 3. EPS
-                        eps = fund_data['eps']
-                        if eps:
-                            eps_str = f"${eps:.2f}"
-                            if eps > 0:
-                                eps_msg, eps_col = "Profitable", "normal" # Green
-                            else:
-                                eps_msg, eps_col = "Unprofitable", "inverse" # Red
+                        eps = fund_data.get('eps')
+                        if eps > 0:
+                            f3.metric("EPS (Earnings Per Share)", f"${eps:.2f}", delta="Profitable", delta_color="normal")
+                        elif eps < 0:
+                            f3.metric("EPS (Earnings Per Share)", f"${eps:.2f}", delta="Unprofitable", delta_color="inverse")
                         else:
-                            eps_str, eps_msg, eps_col = "-", None, "off"
-                        f3.metric("EPS", eps_str, delta=eps_msg, delta_color=eps_col)
+                            f3.metric("EPS (Earnings Per Share)", "-")
                         # 4. Dividend Yield
-                        div = fund_data['dividend_yield']
+                        div = fund_data.get('dividend_yield')
                         if div:
-                            div_str = f"{div*100:.2f}%"
-                            div_msg, div_col = "Income", "normal" # Green
+                            f4.metric("Dividend Yield", f"{div*100:.2f}%")
                         else:
-                            div_str, div_msg, div_col = "-", None, "off"
-                        f4.metric("Dividend Yield", div_str, delta=div_msg, delta_color=div_col)
+                            f4.metric("Dividend Yield", "-")
 
                     # Row 3: Risk Profile
                     st.markdown("##### Risk Profile")
