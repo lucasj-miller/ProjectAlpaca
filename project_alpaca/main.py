@@ -3,10 +3,22 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from backend import Asset  # <--- Import your new class
 
-# 1. PAGE CONFIG
+# CACHING HELPER FUNCTION
+@st.cache_data(ttl=3600) # Cache data for 1 hour (3600 seconds)
+def fetch_stock_data(ticker, start, end):
+    asset = Asset(ticker)
+    # 1. Fetch Price Data
+    stock_data, market_data = asset.get_data(start, end)
+    # 2. Fetch Fundamentals
+    fund_data = asset.get_fundamentals()
+    # 3. Risk
+    risk_data = asset.calculate_risk(stock_data, market_data)
+    return stock_data, market_data, fund_data, risk_data
+
+# PAGE CONFIG
 st.set_page_config(page_title="Alpaca Finance", layout="wide")
 
-# 2. CSS STYLING
+# CSS STYLING
 st.markdown("""
     <style>
     /* Main Background: Subtle Black Gradient */
@@ -15,7 +27,7 @@ st.markdown("""
         color: #ffffff; 
         font-family: "Roboto Mono", monospace;
     }
-    
+
     /* 1. INPUT BOXES */
     div[data-baseweb="input"] {
         background-color: #000000 !important; /* Pure Black Background */
@@ -61,7 +73,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. HEADER
+# HEADER
 col_title = st.columns([0.8, 10])
 st.markdown(
         """
@@ -85,7 +97,7 @@ st.markdown(
 )
 st.markdown("---")
 
-# 4. MAIN INTERFACE
+# MAIN INTERFACE
 col_input, col_result = st.columns([1, 2])
 
 with col_input:
@@ -101,7 +113,7 @@ with col_input:
         st.markdown("###")
         run_btn = st.button("Run Analysis", type="primary", width="stretch")
 
-# 5. EXECUTION LOGIC
+# EXECUTION LOGIC
 with col_result:
     if run_btn and ticker:
         try:
@@ -116,7 +128,7 @@ with col_result:
                     start, end = default_start, default_end
                 
                 # B. Get Data
-                stock_data, market_data = asset.get_data(start, end)
+                stock_data, market_data, fund_data, risk_data = fetch_stock_data(ticker, start, end)
                 
                 if stock_data.empty:
                     st.error(f"No data found for {ticker}")
@@ -203,32 +215,32 @@ with col_result:
                     st.markdown("##### Risk Profile")
                     r1, r2, r3 = st.columns(3)
 
-                    if metrics:
-                        # Color Logic
-                        b_val = metrics['beta']
-                        if b_val > 1.5:
-                            b_col, b_msg = "inverse", "High Volatility"
-                        elif b_val < 0.8:
-                            b_col, b_msg = "normal", "Low Volatility"
-                        else:
-                            b_col, b_msg = "off", "Market Correlated"
-                        r1.metric("Beta", f"{b_val:.2f}", delta=b_msg, delta_color=b_col)
-                        v_val = metrics['volatility']
-                        if v_val < 15:
-                            v_col, v_msg = "normal", "Stable" # Green
-                        elif v_val > 30:
-                            v_col, v_msg = "inverse", "Volatile" # Red
-                        else:
-                            v_col, v_msg = "off", "Moderate"
-                        r2.metric("Annual Volatility", f"{v_val:.1f}%", delta=v_msg, delta_color=v_col)
-                        s_val = metrics['sharpe']
-                        if s_val > 1.0:
-                            s_col, s_msg = "normal", "Good Risk-Adjusted Returns"   # Green
-                        elif s_val < 0.5:
-                            s_col, s_msg = "inverse", "Poor Risk-Adjusted Returns" # Red
-                        else:
-                            s_col, s_msg = "off", "Average"
-                        r3.metric("Sharpe Ratio", f"{s_val:.2f}", delta=s_msg, delta_color=s_col)
+                    # Beta
+                    beta = risk_data.get('beta')
+                    if beta > 1.5:
+                        r1.metric("Beta", f"{beta:.2f}", delta="High Volatility", delta_color="inverse")
+                    elif beta < 0.8:
+                        r1.metric("Beta", f"{beta:.2f}", delta="Low Volatility", delta_color="normal")
+                    elif beta:
+                        r1.metric("Beta", f"{beta:.2f}", delta="Fair", delta_color="off")
+                    else:
+                        r1.metric("Beta", "-")
+
+                    # Sharpe
+                    sharpe = risk_data.get('sharpe')
+                    if sharpe > 1.0:
+                        r2.metric("Sharpe Ratio", f"{sharpe:.2f}", delta="Good", delta_color="normal")
+                    elif sharpe:
+                        r2.metric("Sharpe Ratio", f"{sharpe:.2f}", delta="Poor", delta_color="inverse")
+                    else:
+                        r2.metric("Sharpe Ratio", "-")
+
+                    # Volatility
+                    vol = risk_data.get('volatility')
+                    if vol:
+                        r3.metric("Annual Volatility", f"{vol*100:.1f}%")
+                    else:
+                        r3.metric("Annual Volatility", "-")
 
                     with st.expander("What do these metrics mean?"):
                         st.markdown("""

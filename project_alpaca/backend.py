@@ -84,27 +84,68 @@ class Asset:
         
         return clean_news
 
-    def get_fundamentals(self):
-        """Fetches fundamentals with a fallback mechanism"""
+    # Add this method to the Asset class in backend.py
+    def calculate_risk(self, stock_data, market_data):
+        # Calculates Beta, Sharpe, and Volatility
         try:
-            tick_obj = yf.Ticker(self.ticker)
+            # 1. Calculate Daily Returns
+            stock_returns = stock_data['Close'].pct_change().dropna()
+            market_returns = market_data['Close'].pct_change().dropna()
 
-            # 1. Try Fast Info (Fastest)
-            market_cap = tick_obj.fast_info.get('market_cap')
+            # Align data (ensure same dates)
+            data = pd.DataFrame({'Stock': stock_returns, 'Market': market_returns}).dropna()
 
-            # 2. Fallback: If Fast Info failed, try the standard .info (Slower but detailed)
-            if market_cap is None:
-                market_cap = tick_obj.info.get('marketCap')
+            # 2. Beta Calculation (Covariance / Variance)
+            covariance = data['Stock'].cov(data['Market'])
+            market_variance = data['Market'].var()
+            beta = covariance / market_variance
 
-            # Get other metrics from .info
-            info = tick_obj.info
+            # 3. Annualized Volatility
+            volatility = data['Stock'].std() * (252 ** 0.5)
+
+            # 4. Sharpe Ratio (assuming 4% risk-free rate)
+            rf_rate = 0.04
+            excess_return = data['Stock'].mean() * 252 - rf_rate
+            sharpe = excess_return / volatility
 
             return {
-                "market_cap": market_cap,
-                "pe_ratio": info.get('trailingPE', None),
-                "eps": info.get('trailingEps', None),
-                "dividend_yield": info.get('dividendYield', None)
+                "beta": beta,
+                "volatility": volatility,
+                "sharpe": sharpe
             }
         except Exception as e:
-            print(f"Error fetching fundamentals: {e}")
-            return None
+            return {"beta": None, "volatility": None, "sharpe": None}
+
+    def get_fundamentals(self):
+        """Fetches fundamentals, prioritizing fast_info (API) over info (Scraping)"""
+        data = {
+            "market_cap": None,
+            "pe_ratio": None,
+            "eps": None,
+            "dividend_yield": None
+        }
+        try:
+            tick_obj = yf.Ticker(self.ticker)
+            # 1. Try Fast Info (The "API" method - More reliable on Cloud)
+            # This almost always works even if scraping is blocked
+            try:
+                data["market_cap"] = tick_obj.fast_info.get('market_cap')
+            except:
+                pass # Keep going if this fails
+            # 2. Try Standard Info (The "Scraping" method - Often blocked on Cloud)
+            # We wrap this in a separate try/except so it doesn't kill the Market Cap if it fails
+            try:
+                info = tick_obj.info
+                # Fill in gaps if Fast Info missed them
+                if data["market_cap"] is None:
+                    data["market_cap"] = info.get('marketCap')
+
+                data["pe_ratio"] = info.get('trailingPE')
+                data["eps"] = info.get('trailingEps')
+                data["dividend_yield"] = info.get('dividendYield')
+            except:
+                # If scraping fails, we just leave P/E as None but return whatever Market Cap we got
+                print("Detailed info scraping failed")
+            return data
+        except Exception as e:
+            return {"error": str(e)}
