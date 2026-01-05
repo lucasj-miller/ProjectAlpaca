@@ -1,24 +1,13 @@
+
 import streamlit as st
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from backend import Asset  # <--- Import your new class
 
-# CACHING HELPER FUNCTION
-@st.cache_data(ttl=3600) # Cache data for 1 hour (3600 seconds)
-def fetch_stock_data(ticker, start, end):
-    asset = Asset(ticker)
-    # 1. Fetch Price Data
-    stock_data, market_data = asset.get_data(start, end)
-    # 2. Fetch Fundamentals
-    fund_data = asset.get_fundamentals()
-    # 3. Risk
-    risk_data = asset.calculate_risk(stock_data, market_data)
-    return stock_data, market_data, fund_data, risk_data
-
-# PAGE CONFIG
+# 1. PAGE CONFIG
 st.set_page_config(page_title="Alpaca Finance", layout="wide")
 
-# CSS STYLING
+# 2. CSS STYLING
 st.markdown("""
     <style>
     /* Main Background: Subtle Black Gradient */
@@ -27,7 +16,7 @@ st.markdown("""
         color: #ffffff; 
         font-family: "Roboto Mono", monospace;
     }
-
+    
     /* 1. INPUT BOXES */
     div[data-baseweb="input"] {
         background-color: #000000 !important; /* Pure Black Background */
@@ -73,15 +62,15 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# HEADER
+# 3. HEADER
 col_title = st.columns([0.8, 10])
 st.markdown(
-        """
-        <h1 style='margin-bottom: 0px; margin-top: 0px; padding-top: 10px; font-size: 3rem;'>
-            🦙 Alpaca Finance
-        </h1>
-        """, 
-        unsafe_allow_html=True)
+    """
+    <h1 style='margin-bottom: 0px; margin-top: 0px; padding-top: 10px; font-size: 3rem;'>
+        🦙 Alpaca Finance
+    </h1>
+    """,
+    unsafe_allow_html=True)
 
 st.markdown(
     """
@@ -97,7 +86,7 @@ st.markdown(
 )
 st.markdown("---")
 
-# MAIN INTERFACE
+# 4. MAIN INTERFACE
 col_input, col_result = st.columns([1, 2])
 
 with col_input:
@@ -105,36 +94,36 @@ with col_input:
         st.subheader("Analyze Security")
         ticker = st.text_input("Ticker Symbol", placeholder="AAPL, TSLA...").upper()
         shares = st.number_input("Number of Shares", min_value=0.01, value=1.0, step=0.01)
-        
+
         default_start = datetime.now() - timedelta(days=365)
         default_end = datetime.now()
         date_range = st.date_input("Analysis Period", (default_start, default_end))
-        
+
         st.markdown("###")
         run_btn = st.button("Run Analysis", type="primary", width="stretch")
 
-# EXECUTION LOGIC
+# 5. EXECUTION LOGIC
 with col_result:
     if run_btn and ticker:
         try:
             with st.spinner(f"Analyzing {ticker}..."):
                 # --- INITIALIZE BACKEND CLASS ---
                 asset = Asset(ticker)
-                
+
                 # A. Handle Dates
                 if isinstance(date_range, tuple) and len(date_range) == 2:
                     start, end = date_range
                 else:
                     start, end = default_start, default_end
-                
+
                 # B. Get Data
-                stock_data, market_data, fund_data, risk_data = fetch_stock_data(ticker, start, end)
-                
+                stock_data, market_data = asset.get_data(start, end)
+
                 if stock_data.empty:
                     st.error(f"No data found for {ticker}")
                 else:
                     metrics = asset.calculate_risk_metrics()
-                    
+
                     # --- DISPLAY NEWS (In Left Column) ---
                     with col_input:
                         st.markdown("---")
@@ -150,7 +139,7 @@ with col_result:
 
                     # --- DISPLAY METRICS ---
                     st.subheader(f"Performance: {ticker}")
-                    
+
                     # Row 1: Money
                     current_price = stock_data['Close'].iloc[-1]
                     start_price = stock_data['Close'].iloc[0]
@@ -162,74 +151,39 @@ with col_result:
                     m2.metric("Net Profit/Loss", f"${profit:,.2f}", delta=f"{pct_change:.2f}%")
                     m3.metric("Share Price", f"${current_price:.2f}")
 
-                    # Row 2: Fundamentals
+                    # Row 2: Fundamentals (Coming Soon)
                     st.markdown("##### Fundamentals (Coming Soon)")
-                    """
-                    f1, f2, f3, f4 = st.columns(4)
-                    fund_data = asset.get_fundamentals()
-                    if fund_data:
-                        # 1. Market Cap
-                        mktcap = fund_data.get('market_cap')
-                        if mktcap:
-                            if mktcap> 1e12:
-                                f1.metric("Market Cap", f"{mktcap/1e12:.2f}T")
-                            elif mktcap> 1e9:
-                                f1.metric("Market Cap", f"{mktcap/1e9:.2f}B")
-                            else:
-                                f1.metric("Market Cap", f"{mktcap/1e6:.2f}M")
-                        else:
-                            f1.metric("Market Cap", "-")
-                        # 2. P/E Ratio
-                        pe = fund_data.get('pe_ratio')
-                        if pe:
-                            f2.metric("P/E Ratio", f"{pe:.2f}")
-                        else:
-                            f2.metric("P/E Ratio", "-")
-                        # 3. EPS
-                        eps = fund_data.get('eps')
-                        if eps > 0:
-                            f3.metric("EPS (Earnings Per Share)", f"${eps:.2f}", delta="Profitable", delta_color="normal")
-                        elif eps < 0:
-                            f3.metric("EPS (Earnings Per Share)", f"${eps:.2f}", delta="Unprofitable", delta_color="inverse")
-                        else:
-                            f3.metric("EPS (Earnings Per Share)", "-")
-                        # 4. Dividend Yield
-                        div = fund_data.get('dividend_yield')
-                        if div:
-                            f4.metric("Dividend Yield", f"{div*100:.2f}%")
-                        else:
-                            f4.metric("Dividend Yield", "-")
-                    """
+
                     # Row 3: Risk Profile
                     st.markdown("##### Risk Profile")
                     r1, r2, r3 = st.columns(3)
 
-                    # Beta
-                    beta = risk_data.get('beta')
-                    if beta > 1.5:
-                        r1.metric("Beta", f"{beta:.2f}", delta="High Volatility", delta_color="inverse")
-                    elif beta < 0.8:
-                        r1.metric("Beta", f"{beta:.2f}", delta="Low Volatility", delta_color="normal")
-                    elif beta:
-                        r1.metric("Beta", f"{beta:.2f}", delta="Fair", delta_color="off")
-                    else:
-                        r1.metric("Beta", "-")
-
-                    # Sharpe
-                    sharpe = risk_data.get('sharpe')
-                    if sharpe > 1.0:
-                        r2.metric("Sharpe Ratio", f"{sharpe:.2f}", delta="Good", delta_color="normal")
-                    elif sharpe:
-                        r2.metric("Sharpe Ratio", f"{sharpe:.2f}", delta="Poor", delta_color="inverse")
-                    else:
-                        r2.metric("Sharpe Ratio", "-")
-
-                    # Volatility
-                    vol = risk_data.get('volatility')
-                    if vol:
-                        r3.metric("Annual Volatility", f"{vol*100:.1f}%")
-                    else:
-                        r3.metric("Annual Volatility", "-")
+                    if metrics:
+                        # Color Logic
+                        b_val = metrics['beta']
+                        if b_val > 1.5:
+                            b_col, b_msg = "inverse", "High Volatility"
+                        elif b_val < 0.8:
+                            b_col, b_msg = "normal", "Low Volatility"
+                        else:
+                            b_col, b_msg = "off", "Market Correlated"
+                        r1.metric("Beta", f"{b_val:.2f}", delta=b_msg, delta_color=b_col)
+                        v_val = metrics['volatility']
+                        if v_val < 15:
+                            v_col, v_msg = "normal", "Stable" # Green
+                        elif v_val > 30:
+                            v_col, v_msg = "inverse", "Volatile" # Red
+                        else:
+                            v_col, v_msg = "off", "Moderate"
+                        r2.metric("Annual Volatility", f"{v_val:.1f}%", delta=v_msg, delta_color=v_col)
+                        s_val = metrics['sharpe']
+                        if s_val > 1.0:
+                            s_col, s_msg = "normal", "Good Risk-Adjusted Returns"   # Green
+                        elif s_val < 0.5:
+                            s_col, s_msg = "inverse", "Poor Risk-Adjusted Returns" # Red
+                        else:
+                            s_col, s_msg = "off", "Average"
+                        r3.metric("Sharpe Ratio", f"{s_val:.2f}", delta=s_msg, delta_color=s_col)
 
                     with st.expander("What do these metrics mean?"):
                         st.markdown("""
@@ -342,7 +296,7 @@ with col_result:
                         <p>Enter a ticker (e.g. AAPL) to view the<br>Equity Research Dashboard</p>
                     </div>
                 </div>
-                """, 
+                """,
                 unsafe_allow_html=True
             )
 st.markdown("---")

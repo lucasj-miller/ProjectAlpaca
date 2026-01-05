@@ -69,94 +69,42 @@ class Asset:
         tick_obj = yf.Ticker(self.ticker)
         raw_news = tick_obj.news
         clean_news = []
-        
+
         if raw_news:
             for item in raw_news[:limit]:
                 content = item.get('content', {})
                 url_data = content.get('clickThroughUrl') or content.get('canonicalUrl')
-                
+
                 article = {
                     "title": content.get('title', 'No Title'),
                     "link": url_data.get('url', '#') if url_data else '#',
                     "publisher": content.get('provider', {}).get('displayName', 'Unknown')
                 }
                 clean_news.append(article)
-        
+
         return clean_news
 
-    # Add this method to the Asset class in backend.py
-    def calculate_risk(self, stock_data, market_data):
-        # Calculates Beta, Sharpe, and Volatility
-        try:
-            # 1. Calculate Daily Returns
-            stock_returns = stock_data['Close'].pct_change().dropna()
-            market_returns = market_data['Close'].pct_change().dropna()
-
-            # Align data (ensure same dates)
-            data = pd.DataFrame({'Stock': stock_returns, 'Market': market_returns}).dropna()
-
-            # 2. Beta Calculation (Covariance / Variance)
-            covariance = data['Stock'].cov(data['Market'])
-            market_variance = data['Market'].var()
-            beta = covariance / market_variance
-
-            # 3. Annualized Volatility
-            volatility = data['Stock'].std() * (252 ** 0.5)
-
-            # 4. Sharpe Ratio (assuming 4% risk-free rate)
-            rf_rate = 0.04
-            excess_return = data['Stock'].mean() * 252 - rf_rate
-            sharpe = excess_return / volatility
-
-            return {
-                "beta": beta,
-                "volatility": volatility,
-                "sharpe": sharpe
-            }
-        except Exception as e:
-            return {"beta": None, "volatility": None, "sharpe": None}
-
     def get_fundamentals(self):
-        # Calculates metrics from raw data (fast_info, financials)
+        """Fetches fundamentals with a fallback mechanism"""
         try:
-            ticker_obj = yf.Ticker(self.ticker)
-            # Get Price and Market Cap
-            try:
-                price = ticker_obj.info['currentPrice']
-                market_cap = ticker_obj.info['marketCap']
-            except:
-                price = None
-                market_cap = None
-            # Calculate Dividend Yield
-            div_yield = None
-            try:
-                divs = ticker_obj.dividends
-                oneyear = pd.Timestamp.now().tz_localize(divs.index.dtype.tz) - pd.Timedelta(days=365)
-                recent_divs = divs[divs.index >= oneyear]
-                if not recent_divs.empty and price:
-                    total_div = recent_divs.sum()
-                    div_yield = total_div / price
-            except:
-                div_yield = None
-            # Calculate P/E Ratio
-            pe_ratio = None
-            try:
-                stmt = ticker_obj.income_stmt
-                if not stmt.empty:
-                    eps = None
-                    if 'Diluted EPS' in stmt.index:
-                        eps = stmt.loc['Diluted EPS'].iloc[0]
-                    elif 'Basic EPS' in stmt.index:
-                        eps = stmt.loc['Basic EPS'].iloc[0]
-                    if eps and price:
-                        pe_ratio = price / eps
-            except:
-                pe_ratio = None
+            tick_obj = yf.Ticker(self.ticker)
+
+            # 1. Try Fast Info (Fastest)
+            market_cap = tick_obj.fast_info.get('market_cap')
+
+            # 2. Fallback: If Fast Info failed, try the standard .info (Slower but detailed)
+            if market_cap is None:
+                market_cap = tick_obj.info.get('marketCap')
+
+            # Get other metrics from .info
+            info = tick_obj.info
+
             return {
                 "market_cap": market_cap,
-                "pe_ratio": pe_ratio,
-                "dividend_yield": div_yield,
-                "eps": eps
+                "pe_ratio": info.get('trailingPE', None),
+                "eps": info.get('trailingEps', None),
+                "dividend_yield": info.get('dividendYield', None)
             }
         except Exception as e:
-            return {"error": str(e)}
+            print(f"Error fetching fundamentals: {e}")
+            return None
