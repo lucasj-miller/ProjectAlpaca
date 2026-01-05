@@ -77,7 +77,7 @@ st.markdown(
         <p style='font-size: 1.0rem; color: #ddd; margin: 0; line-height: 1.5;'>
             <b>Equity Research Dashboard:</b> An institutional-grade analytics tool designed for rapid security assessment. 
             This platform integrates real-time <b>Fundamental Valuation</b> (P/E, Market Cap), <b>Quantitative Risk Scoring</b> (Beta, Sharpe Ratio), 
-            and <b>Technical Trend Analysis</b> (50/200-Day SMA) to provide a comprehensive view of asset performance.
+            and <b>Relative Performance Analysis</b> (Alpha vs. S&P 500) to measure excess returns against the benchmark.
         </p>
     </div>
     """,
@@ -92,14 +92,14 @@ with col_input:
     with st.container(border=True):
         st.subheader("Analyze Security")
         ticker = st.text_input("Ticker Symbol", placeholder="AAPL, TSLA...").upper()
-        shares = st.number_input("Number of Shares", min_value=0.01, value=10.0, step=0.1)
+        shares = st.number_input("Number of Shares", min_value=0.01, value=1.0, step=0.01)
         
         default_start = datetime.now() - timedelta(days=365)
         default_end = datetime.now()
         date_range = st.date_input("Analysis Period", (default_start, default_end))
         
         st.markdown("###")
-        run_btn = st.button("Run Analysis", type="primary", use_container_width=True)
+        run_btn = st.button("Run Analysis", type="primary", width="stretch")
 
 # 5. EXECUTION LOGIC
 with col_result:
@@ -116,7 +116,7 @@ with col_result:
                     start, end = default_start, default_end
                 
                 # B. Get Data
-                stock_data = asset.get_data(start, end)
+                stock_data, market_data = asset.get_data(start, end)
                 
                 if stock_data.empty:
                     st.error(f"No data found for {ticker}")
@@ -232,7 +232,7 @@ with col_result:
 
                     with st.expander("What do these metrics mean?"):
                         st.markdown("""
-                        ### 🏢 Fundamental Metrics (The Business)
+                        ### Fundamental Metrics (The Business)
                         
                         **Market Cap** 
                         * The total value of the company (Share Price × Total Shares).
@@ -246,7 +246,7 @@ with col_result:
                         **Dividend Yield** 
                         * The annual percentage return paid to shareholders in dividends.
                         
-                        ### 📉 Technical Metrics (The Stock)
+                        ### Technical Metrics (The Stock)
                         
                         **Beta (β)**
                         * **What it is:** Measures how much a stock moves compared to the S&P 500.
@@ -267,60 +267,66 @@ with col_result:
                         """)
 
                     # Chart
-                    # --- ADVANCED CHARTING ---
-                    st.markdown("##### Price Action")
+                    # 1. Get Data (Unpack both stock and market)
+                    stock_data, market_data = asset.get_data(start, end)
 
-                    # 2. Build the Plot (The Visuals)
+                    # 2. Normalize Data
+                    # comparable even if Stock is $150 and S&P is $4000
+                    stock_data['Cumulative Return'] = (stock_data['Close'] / stock_data['Close'].iloc[0] - 1) * 100
+                    market_data['Cumulative Return'] = (market_data['Close'] / market_data['Close'].iloc[0] - 1) * 100
+
+                    # 3. Build the "Alpha" Chart
+                    st.markdown("##### Performance vs. S&P 500")
                     fig = go.Figure()
 
-                    # A. Main Price Line (Candlestick or Line)
+                    # A. The Stock
+                    # maybe green/red gradient fill later?
                     fig.add_trace(go.Scatter(
-                        x=stock_data.index, y=stock_data['Close'],
+                        x=stock_data.index, y=stock_data['Cumulative Return'],
                         mode='lines', name=ticker,
-                        line=dict(color='#00FF00', width=2) # Neon Green
+                        line=dict(color='#FF9900', width=2), # Your Amber Brand Color
+                        fill='tozeroy', # Fills area under line
+                        fillcolor='rgba(255, 153, 0, 0.1)' # Subtle amber glow
                     ))
 
-                    # B. 50-Day SMA (Short Term Trend) - Orange
+                    # B. The Benchmark (S&P 500)
                     fig.add_trace(go.Scatter(
-                        x=stock_data.index, y=stock_data['SMA_50'],
-                        mode='lines', name='50-Day SMA',
-                        line=dict(color='#FF9900', width=1, dash='dot')
+                        x=market_data.index, y=market_data['Cumulative Return'],
+                        mode='lines', name='S&P 500 (Benchmark)',
+                        line=dict(color='#ffffff', width=2, dash='dash') # White dashed line
                     ))
 
-                    # C. 200-Day SMA (Long Term Trend) - Purple
-                    fig.add_trace(go.Scatter(
-                        x=stock_data.index, y=stock_data['SMA_200'],
-                        mode='lines', name='200-Day SMA',
-                        line=dict(color='#d62728', width=1)
-                    ))
-
-                    # 3. Bloomberg Chart Styling
+                    # 4. Bloomberg Styling (Updated for % axis)
                     fig.update_layout(
                         height=500,
-                        paper_bgcolor='#000000', # Black Background
-                        plot_bgcolor='#000000',  # Black Plot Area
+                        paper_bgcolor='#000000',
+                        plot_bgcolor='#000000',
                         margin=dict(t=30, l=0, r=0, b=0),
-                        font=dict(color='#FF9900', family="Roboto Mono"), # Amber Text
-                        xaxis=dict(showgrid=True, gridcolor='#1a1a1a', gridwidth=1),
-                        yaxis=dict(showgrid=True, gridcolor='#1a1a1a', gridwidth=1, side='right'), # Price on Right
-                        legend=dict(x=0, y=1, bgcolor='rgba(0,0,0,0)')
+                        font=dict(color='#ffffff', family="Roboto Mono"),
+                        xaxis=dict(showgrid=True, gridcolor='#222', gridwidth=1),
+                        yaxis=dict(
+                            showgrid=True, gridcolor='#222', gridwidth=1,
+                            side='right', # Y-axis on right
+                            ticksuffix="%" # Shows numbers as percentages
+                        ),
+                        legend=dict(x=0, y=1, bgcolor='rgba(0,0,0,0)'),
+                        hovermode="x unified"
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+
+                    st.plotly_chart(fig, width="stretch")
+
+                    # Updated Explanation Dropdown
                     with st.expander("How do you read this chart?"):
                         st.markdown("""
-                        ### Moving Averages (SMA)
-                        The lines overlaying the price chart help identify the trend direction by smoothing out daily noise.
+                        ### Relative Performance
+                        This chart normalizes both the stock and the S&P 500 to start at 0% on Day 1.
                         
-                        * **50-Day SMA (Orange):** The short-term trend. Traders often use this as a dynamic support level in an uptrend.
-                        * **200-Day SMA (Red):** The long-term trend. If the price is above this line, the stock is generally considered to be in a "Bull Market."
+                        * **Amber Line:** The cumulative return of your selected stock.
+                        * **White Dashed Line:** The cumulative return of the market (S&P 500).
                         
-                        ---
-                        
-                        ### Trading Signals
-                        When these two lines cross, it signals a major shift in momentum:
-                        
-                        * **Golden Cross:** When the **50-Day** crosses *above* the **200-Day**. This is a **Bullish** (Buy) signal indicating gaining momentum.
-                        * **Death Cross:** When the **50-Day** crosses *below* the **200-Day**. This is a **Bearish** (Sell) signal indicating a potential crash.
+                        **The "Spread" (Gap) between lines = Alpha.**
+                        * If the Amber line is **above** the White line, the stock is generating **excess returns (Alpha)**.
+                        * If it is below, it is underperforming the benchmark.
                         """)
         except Exception as e:
             st.error(f"Error: {e}")
@@ -342,8 +348,9 @@ st.markdown("---")
 st.markdown(
     """
     <div style='text-align: center; color: #666; font-family: "Roboto Mono", monospace; font-size: 0.8rem;'>
-        Alpaca Finance v0.1.0 (Alpha Build) | Data provided by Yahoo Finance<br>
-        Not financial advice. For educational purposes only.
+        Alpaca Finance v0.1.1 (Alpha Build) | Data provided by Yahoo Finance.<br>
+        Not financial advice. For educational purposes only.<br>
+        Created by <a href="https://www.linkedin.com/in/lucasjustinmiller" target="_blank" style="color: #FF9900; text-decoration: none;">Lucas Miller</a>
     </div>
     """,
     unsafe_allow_html=True

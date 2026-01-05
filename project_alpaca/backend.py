@@ -1,7 +1,7 @@
+import requests
 import yfinance as yf
 import pandas as pd
 import numpy as np
-from datetime import timedelta
 
 class Asset:
     def __init__(self, ticker):
@@ -10,30 +10,27 @@ class Asset:
         self.market_data = pd.DataFrame()
 
     def get_data(self, start_date, end_date):
-        """Fetches Stock data with a buffer for Moving Averages"""
+        """Fetches Stock and Benchmark data, returns both as a tuple"""
 
-        # 1. Create a "Buffer" (Fetch 1 extra year of data)
-        # We need this history to calculate the 200-day SMA for the very first requested day.
-        buffer_start = start_date - timedelta(days=365)
+        # 1. Define the Benchmark (S&P 500)
+        benchmark_ticker = "^GSPC"
 
-        self.stock_data = yf.download(self.ticker, start=buffer_start, end=end_date, progress=False)
-        self.market_data = yf.download("^GSPC", start=start_date, end=end_date, progress=False)
+        # 2. Download Data (Let yfinance handle the session internally)
+        # We fetch a bit of buffer to ensure we have data for the start date
+        self.stock_data = yf.download(self.ticker, start=start_date, end=end_date, progress=False)
+        self.market_data = yf.download(benchmark_ticker, start=start_date, end=end_date, progress=False)
 
-        # Clean MultiIndex
+        # 3. Clean up MultiIndex (Fix for recent yfinance updates)
         if isinstance(self.stock_data.columns, pd.MultiIndex):
             self.stock_data.columns = self.stock_data.columns.droplevel(1)
         if isinstance(self.market_data.columns, pd.MultiIndex):
             self.market_data.columns = self.market_data.columns.droplevel(1)
 
-        # 2. Calculate Moving Averages on the FULL dataset (including buffer)
-        self.stock_data['SMA_50'] = self.stock_data['Close'].rolling(window=50).mean()
-        self.stock_data['SMA_200'] = self.stock_data['Close'].rolling(window=200).mean()
-
-        # 3. Slice the data back to what the user actually asked for
-        # This cuts off the 2024 buffer data so the graph doesn't look zoomed out
+        # 4. Ensure data alignment
         self.stock_data = self.stock_data.loc[start_date:]
+        self.market_data = self.market_data.loc[start_date:]
 
-        return self.stock_data
+        return self.stock_data, self.market_data
 
     def calculate_risk_metrics(self):
         """Calculates Beta, Volatility, and Sharpe Ratio"""
