@@ -163,7 +163,8 @@ with col_result:
                     m3.metric("Share Price", f"${current_price:.2f}")
 
                     # Row 2: Fundamentals
-                    st.markdown("##### Fundamentals")
+                    st.markdown("##### Fundamentals (Coming Soon)")
+                    """
                     f1, f2, f3, f4 = st.columns(4)
                     fund_data = asset.get_fundamentals()
                     if fund_data:
@@ -198,7 +199,7 @@ with col_result:
                             f4.metric("Dividend Yield", f"{div*100:.2f}%")
                         else:
                             f4.metric("Dividend Yield", "-")
-
+                    """
                     # Row 3: Risk Profile
                     st.markdown("##### Risk Profile")
                     r1, r2, r3 = st.columns(3)
