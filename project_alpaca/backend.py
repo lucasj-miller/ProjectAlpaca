@@ -9,8 +9,8 @@ class Asset:
         self.stock_data = pd.DataFrame()
         self.market_data = pd.DataFrame()
 
+    # Fetches stock and benchmark data
     def get_data(self, start_date, end_date):
-        """Fetches Stock and Benchmark data, returns both as a tuple"""
 
         # 1. Define the Benchmark (S&P 500)
         benchmark_ticker = "^GSPC"
@@ -84,27 +84,75 @@ class Asset:
 
         return clean_news
 
-    def get_fundamentals(self):
-        """Fetches fundamentals with a fallback mechanism"""
+    # Uses raw yfinance data to calculate fundamentals
+    def get_fundamentals(self, current_price=None): # <--- Added argument
+        data = {
+            "market_cap": None,
+            "pe_ratio": None,
+            "eps": None,
+            "dividend_yield": None,
+            "description": None
+        }
+
         try:
-            tick_obj = yf.Ticker(self.ticker)
+            tick = yf.Ticker(self.ticker)
 
-            # 1. Try Fast Info (Fastest)
-            market_cap = tick_obj.fast_info.get('market_cap')
+            # 1. MARKET CAP (Try fast_info, fallback to info)
+            try:
+                # Primary method
+                data["market_cap"] = tick.fast_info['market_cap']
+            except:
+                # Fallback method (slower but sometimes works when fast_info fails)
+                try:
+                    data["market_cap"] = tick.info.get('marketCap')
+                except:
+                    pass
 
-            # 2. Fallback: If Fast Info failed, try the standard .info (Slower but detailed)
-            if market_cap is None:
-                market_cap = tick_obj.info.get('marketCap')
+            # 2. EPS (This is working, keep it!)
+            eps = None
+            try:
+                stmt = tick.income_stmt
+                if not stmt.empty:
+                    possible_keys = ['Diluted EPS', 'Basic EPS', 'DilutedEPS']
+                    for key in possible_keys:
+                        if key in stmt.index:
+                            eps = stmt.loc[key].iloc[0]
+                            break
+                    data["eps"] = eps
+            except:
+                pass
 
-            # Get other metrics from .info
-            info = tick_obj.info
+            # 3. P/E RATIO (The Fix)
+            # If we didn't get a price argument, try to fetch it
+            if current_price is None:
+                try:
+                    current_price = tick.fast_info['last_price']
+                except:
+                    pass
 
-            return {
-                "market_cap": market_cap,
-                "pe_ratio": info.get('trailingPE', None),
-                "eps": info.get('trailingEps', None),
-                "dividend_yield": info.get('dividendYield', None)
-            }
+            # Calculate P/E using whatever price we have
+            if eps and current_price:
+                data["pe_ratio"] = current_price / eps
+
+            # 4. DIVIDEND YIELD
+            try:
+                divs = tick.dividends
+                if not divs.empty:
+                    # Get dividends from last 365 days
+                    one_year_ago = pd.Timestamp.now().tz_localize(divs.index.dtype.tz) - pd.Timedelta(days=365)
+                    recent_divs = divs[divs.index >= one_year_ago]
+                    if not recent_divs.empty and current_price:
+                        data["dividend_yield"] = recent_divs.sum() / current_price
+            except:
+                pass
+            # 5. COMPANY DESCRIPTION
+            try:
+                # We try to get the summary. If Yahoo blocks this specific call,
+                # it will just fail silently and leave description as None.
+                data["description"] = tick.info.get('longBusinessSummary')
+            except:
+                pass
+            return data
+
         except Exception as e:
-            print(f"Error fetching fundamentals: {e}")
-            return None
+            return data

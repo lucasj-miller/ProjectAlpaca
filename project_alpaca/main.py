@@ -120,10 +120,16 @@ with col_result:
                 if stock_data.empty:
                     st.error(f"No data found for {ticker}")
                 else:
+                    latest_price = stock_data['Close'].iloc[-1]
                     metrics = asset.calculate_risk_metrics()
+                    funds = asset.get_fundamentals(latest_price)
 
                     # --- DISPLAY NEWS (In Left Column) ---
                     with col_input:
+                        desc = funds.get('description')
+                        if desc:
+                            with st.expander(f"📖 About {ticker}"):
+                                st.write(desc)
                         with st.container(border=True):
                             st.subheader("📰 Recent News")
                             news_items = asset.get_news()
@@ -148,7 +154,7 @@ with col_result:
                             """,
                             unsafe_allow_html=True)
 
-                        # Row 1: Money
+                        # Row 1: Performance
                         current_price = stock_data['Close'].iloc[-1]
                         start_price = stock_data['Close'].iloc[0]
                         profit = (current_price - start_price)
@@ -158,32 +164,85 @@ with col_result:
                         m1.metric("Share Price", f"${current_price:,.2f}")
                         m2.metric("Price Change", f"${profit:,.2f}", delta=f"{pct_change:.2f}%")
 
-                        # Row 2: Fundamentals (Coming Soon)
+                        # Row 2: Fundamentals
                         st.markdown(
                             f"""
                             <div style='background-color: #111; padding: 15px; border-radius: 5px; border-left: 5px solid #FF9900; margin-bottom: 20px;'>
                                 <p style='font-size: 1.0rem; color: #ddd; margin: 0; line-height: 1.5;'>
-                                    <b>🏢 Fundamental Data | Coming Soon</b>
+                                    <b>🏢 Fundamental Data</b>
                                 </p>
                             </div>
                             """,
                             unsafe_allow_html=True)
-                        st.markdown("###")
+
+                        f1, f2, f3, f4 = st.columns(4)
+
+                        # 1. Market Cap
+                        mc = funds.get('market_cap')
+                        if mc:
+                            fmt_mc = f"${mc/1e12:.2f}T" if mc > 1e12 else f"${mc/1e9:.2f}B"
+                            f1.metric("Market Cap", fmt_mc)
+                        else:
+                            f1.metric("Market Cap", "-")
+
+                        # 2. P/E Ratio
+                        pe = funds.get('pe_ratio')
+                        if pe:
+                            # Logic:
+                            # < 0: Loss Making (Red)
+                            # 0-20: Value / Cheap (Green)
+                            # 20-40: Fair / Average (Grey)
+                            # > 40: High Premium / Expensive (Red)
+
+                            if pe < 0:
+                                pe_col, pe_msg = "inverse", "Loss Making"
+                            elif pe < 20:
+                                pe_col, pe_msg = "normal", "Value"
+                            elif pe < 40:
+                                pe_col, pe_msg = "off", "Fair Value"
+                            else:
+                                pe_col, pe_msg = "inverse", "High Premium"
+
+                            f2.metric("P/E Ratio", f"{pe:.2f}", delta=pe_msg, delta_color=pe_col)
+                        else:
+                            f2.metric("P/E Ratio", "-")
+
+                        # 3. EPS
+                        eps = funds.get('eps')
+                        if eps:
+                            if eps > 0:
+                                f3.metric("EPS (TTM)", f"${eps:.2f}", delta="Positive", delta_color="normal")
+                            else:
+                                f3.metric("EPS (TTM)", f"${eps:.2f}", delta="Negative", delta_color="inverse")
+                        else:
+                            f3.metric("EPS (TTM)", "-")
+
+                        # 4. Div Yield (Bonus if you want it)
+                        div = funds.get('dividend_yield')
+                        if div:
+                            f4.metric("Div Yield", f"{div*100:.2f}%")
+                        else:
+                            # Fallback to Price if no div
+                            f4.metric("Div Yield", "-")
                         with st.expander("❓ What do these metrics mean?"):
                             st.markdown("""
-                            ### Fundamental Metrics (The Business)
-                            
                             **Market Cap** 
-                            * The total value of the company (Share Price × Total Shares).
+                            * Market capitalization, or market cap, is the current market value of all of a company's outstanding stock shares. 
+                            * Market cap is often used to indicate a company's size and worth in comparison to its peers.
                             
                             **P/E Ratio (Price-to-Earnings)** 
-                            * How much you pay for $1 of earnings. High (>30) suggests high growth expectations; Low (<15) suggests value.
+                            * The price-to-earnings (P/E) ratio measures a company's share price relative to its earnings per share (EPS). 
+                            * Often called the price or earnings multiple, the P/E ratio helps assess the relative value of a company's stock.
+                            * It helps to determine whether a stock is overvalued or undervalued.
                             
                             **EPS (Earnings Per Share)** 
-                            * The portion of a company's profit allocated to each share. Positive = Profitable.
+                            * Earnings per share (EPS) is a commonly used measure of a company's profitability. 
+                            * It indicates how much profit each outstanding share of common stock has earned. 
+                            * Generally speaking, the higher a company's EPS, the more profitable it is considered to be.
                             
                             **Dividend Yield** 
-                            * The annual percentage return paid to shareholders in dividends.
+                            * The annual percentage return paid to shareholders in dividends. 
+                            * A blank value means the company does not pay dividends.
                             """)
                         # Row 3: Risk Profile
                         st.markdown(
@@ -330,7 +389,7 @@ st.markdown("---")
 st.markdown(
     """
     <div style='text-align: center; color: #666; font-family: "Roboto Mono", monospace; font-size: 0.8rem;'>
-        Alpaca Finance v0.1.2 (Alpha Build) | Data provided by Yahoo Finance.<br>
+        Alpaca Finance v0.1.3 (Alpha Build) | Data provided by Yahoo Finance.<br>
         Not financial advice. For educational purposes only.<br>
         Created by <a href="https://www.linkedin.com/in/lucasjustinmiller" target="_blank" style="color: #FF9900; text-decoration: none;">Lucas Miller</a>
     </div>
