@@ -3,3 +3,4 @@ yfinance>=0.2.4
 pandas
 plotly
 numpy
+wikipedia
