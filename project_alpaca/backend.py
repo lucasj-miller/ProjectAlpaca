@@ -1,7 +1,7 @@
-import requests
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import wikipedia
 
 class Asset:
     def __init__(self, ticker):
@@ -9,14 +9,12 @@ class Asset:
         self.stock_data = pd.DataFrame()
         self.market_data = pd.DataFrame()
 
-    # Fetches stock and benchmark data
+    # == Fetches Stock and Benchmark (S&P 500) Data ==
     def get_data(self, start_date, end_date):
-
         # 1. Define the Benchmark (S&P 500)
         benchmark_ticker = "^GSPC"
 
-        # 2. Download Data (Let yfinance handle the session internally)
-        # We fetch a bit of buffer to ensure we have data for the start date
+        # 2. Download Data for both Stock and Benchmark
         self.stock_data = yf.download(self.ticker, start=start_date, end=end_date, progress=False)
         self.market_data = yf.download(benchmark_ticker, start=start_date, end=end_date, progress=False)
 
@@ -26,14 +24,15 @@ class Asset:
         if isinstance(self.market_data.columns, pd.MultiIndex):
             self.market_data.columns = self.market_data.columns.droplevel(1)
 
-        # 4. Ensure data alignment
+        # 4. Ensure Data Aligns with Each Other
         self.stock_data = self.stock_data.loc[start_date:]
         self.market_data = self.market_data.loc[start_date:]
 
         return self.stock_data, self.market_data
 
+    # == Calculates Risk Metrics (Beta, Volatility, Sharpe Ratio) ==
     def calculate_risk_metrics(self):
-        """Calculates Beta, Volatility, and Sharpe Ratio"""
+        # If empty, return None
         if self.stock_data.empty or self.market_data.empty:
             return None
 
@@ -64,8 +63,8 @@ class Asset:
             "sharpe": sharpe
         }
 
+    # == Fetch recent news on the Stock ==
     def get_news(self, limit=3):
-        """Fetches and cleans news articles"""
         tick_obj = yf.Ticker(self.ticker)
         raw_news = tick_obj.news
         clean_news = []
@@ -84,20 +83,33 @@ class Asset:
 
         return clean_news
 
-    # Uses raw yfinance data to calculate fundamentals
-    def get_fundamentals(self, current_price=None): # <--- Added argument
+    # == Use raw yfinance data to fetch additional fundamentals ==
+    def get_fundamentals(self, current_price=None):
         data = {
             "market_cap": None,
             "pe_ratio": None,
             "eps": None,
             "dividend_yield": None,
-            "description": None
+            "description": None,
+            "name": self.ticker
         }
 
         try:
             tick = yf.Ticker(self.ticker)
 
-            # 1. MARKET CAP (Try fast_info, fallback to info)
+            # GET COMPANY NAME (for Wikipedia search)
+            # Try multiple keys because yfinance can be inconsistent
+            try:
+                # check shortName (e.g. "Fossil Group, Inc.")
+                name = tick.info.get('shortName')
+                if not name:
+                    name = tick.info.get('longName')
+                if name:
+                    data["name"] = name
+            except:
+                pass
+
+            # MARKET CAP (Try fast_info, fallback to info)
             try:
                 # Primary method
                 data["market_cap"] = tick.fast_info['market_cap']
@@ -108,7 +120,7 @@ class Asset:
                 except:
                     pass
 
-            # 2. EPS (This is working, keep it!)
+            # EPS
             eps = None
             try:
                 stmt = tick.income_stmt
@@ -122,14 +134,12 @@ class Asset:
             except:
                 pass
 
-            # 3. P/E RATIO (The Fix)
-            # If we didn't get a price argument, try to fetch it
+            # 3. P/E RATIO
             if current_price is None:
                 try:
                     current_price = tick.fast_info['last_price']
                 except:
                     pass
-
             # Calculate P/E using whatever price we have
             if eps and current_price:
                 data["pe_ratio"] = current_price / eps
@@ -145,14 +155,25 @@ class Asset:
                         data["dividend_yield"] = recent_divs.sum() / current_price
             except:
                 pass
+
             # 5. COMPANY DESCRIPTION
             try:
-                # We try to get the summary. If Yahoo blocks this specific call,
-                # it will just fail silently and leave description as None.
-                data["description"] = tick.info.get('longBusinessSummary')
+                # Strategy 1: Search by Company Name (Best results)
+                # e.g. Search "Fossil Group, Inc." -> specific page
+                if data["name"] != self.ticker:
+                    search_term = data["name"]
+                else:
+                    # Strategy 2: If we only have ticker, append "Inc"
+                    # "FOSL Inc" will not auto-correct to "Foal"
+                    search_term = f"{self.ticker} Inc"
+                data["description"] = wikipedia.summary(search_term, sentences=3)
             except:
-                pass
-            return data
+                try:
+                    # Strategy 3: "Ticker + stock" (Last resort)
+                    data["description"] = wikipedia.summary(f"{self.ticker} stock", sentences=3)
+                except:
+                    data["description"] = "Description unavailable."
 
+            return data
         except Exception as e:
             return data

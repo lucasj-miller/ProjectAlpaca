@@ -77,7 +77,7 @@ st.markdown(
     <div style='background-color: #111; padding: 15px; border-radius: 5px; border-left: 5px solid #FF9900; margin-bottom: 20px;'>
         <p style='font-size: 1.0rem; color: #ddd; margin: 0; line-height: 1.5;'>
             <b>Equity Research Dashboard:</b> An institutional-grade analytics tool designed for rapid security assessment. 
-            This platform integrates real-time <b>Fundamental Valuation</b> (P/E, Market Cap), <b>Quantitative Risk Scoring</b> (Beta, Sharpe Ratio), 
+            This platform integrates real-time <b>Performance Evaluation</b> (Price, Price Change), <b>Fundamental Data</b> (P/E, Market Cap), <b>Quantitative Risk Scoring</b> (Beta, Sharpe Ratio), 
             and <b>Relative Performance Analysis</b> (Alpha vs. S&P 500) to measure excess returns against the benchmark.
         </p>
     </div>
@@ -89,6 +89,7 @@ st.markdown("---")
 # 4. MAIN INTERFACE
 col_input, col_result = st.columns([1, 2])
 
+# Box for inputting name of Stock and time frame.
 with col_input:
     with st.container(border=True):
         st.subheader("🛠️ Analyze Security")
@@ -104,8 +105,9 @@ with col_input:
 with col_result:
     if run_btn and ticker:
         try:
+            # Loading circle
             with st.spinner(f"Analyzing {ticker}..."):
-                # --- INITIALIZE BACKEND CLASS ---
+                # Initialize Asset
                 asset = Asset(ticker)
 
                 # A. Handle Dates
@@ -123,12 +125,14 @@ with col_result:
                     latest_price = stock_data['Close'].iloc[-1]
                     metrics = asset.calculate_risk_metrics()
                     funds = asset.get_fundamentals(latest_price)
+                    # Determine Company Name
+                    company_name = funds.get('name', ticker)
 
-                    # --- DISPLAY NEWS (In Left Column) ---
+                    # Display Description and News in left column.
                     with col_input:
                         desc = funds.get('description')
-                        if desc:
-                            with st.expander(f"📖 About {ticker}"):
+                        if desc and desc != "Description unavailable.":
+                            with st.container(border=True):
                                 st.write(desc)
                         with st.container(border=True):
                             st.subheader("📰 Recent News")
@@ -141,14 +145,14 @@ with col_result:
                             else:
                                 st.write("No news found.")
 
-                    # --- DISPLAY METRICS ---
+                    # Display metrics on the right column
                     with st.container(border=True):
                         # Title
                         st.markdown(
                             f"""
                             <div style='background-color: #111; padding: 15px; border-radius: 5px; border-left: 5px solid #FF9900; margin-bottom: 20px;'>
                                 <p style='font-size: 1.0rem; color: #ddd; margin: 0; line-height: 1.5;'>
-                                    <b>📈 {ticker}'s Recent Performance</b>
+                                    <b>📈 {company_name}'s Recent Performance</b>
                                 </p>
                             </div>
                             """,
@@ -220,10 +224,10 @@ with col_result:
                         # 4. Div Yield (Bonus if you want it)
                         div = funds.get('dividend_yield')
                         if div:
-                            f4.metric("Div Yield", f"{div*100:.2f}%")
+                            f4.metric("Dividend Yield", f"{div*100:.2f}%")
                         else:
                             # Fallback to Price if no div
-                            f4.metric("Div Yield", "-")
+                            f4.metric("Dividend Yield", "-")
                         with st.expander("❓ What do these metrics mean?"):
                             st.markdown("""
                             **Market Cap** 
@@ -389,7 +393,7 @@ st.markdown("---")
 st.markdown(
     """
     <div style='text-align: center; color: #666; font-family: "Roboto Mono", monospace; font-size: 0.8rem;'>
-        Alpaca Finance v0.1.3 (Alpha Build) | Data provided by Yahoo Finance.<br>
+        Alpaca Finance v0.1.4 (Alpha Build) | Data provided by Yahoo Finance.<br>
         Not financial advice. For educational purposes only.<br>
         Created by <a href="https://www.linkedin.com/in/lucasjustinmiller" target="_blank" style="color: #FF9900; text-decoration: none;">Lucas Miller</a>
     </div>
